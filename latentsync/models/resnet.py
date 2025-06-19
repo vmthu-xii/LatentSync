@@ -141,17 +141,7 @@ class ResnetBlock3D(nn.Module):
         else:
             self.norm1 = torch.nn.GroupNorm(num_groups=groups, num_channels=in_channels, eps=eps, affine=True)
 
-        # Skip the first convolution if using STG
-        if self.skip_conv1:
-            self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=1)
-            with torch.no_grad():
-                self.conv1.weight.zero_()
-                for i in range(min(in_channels, out_channels)):
-                    self.conv1.weight[i, i, 0, 0, 0] = 1.0
-                if self.conv1.bias is not None:
-                    self.conv1.bias.zero_()
-        else:
-            self.conv1 = InflatedConv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = InflatedConv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         if temb_channels is not None:
             if self.time_embedding_norm == "default":
@@ -190,6 +180,16 @@ class ResnetBlock3D(nn.Module):
         self.conv_shortcut = None
         if self.use_in_shortcut:
             self.conv_shortcut = InflatedConv3d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+
+    # Enable skip connection for STG
+    def enable_skip(self):
+        self.conv1 = nn.Conv3d(self.in_channels, self.out_channels, kernel_size=1)
+        with torch.no_grad():
+            self.conv1.weight.zero_()
+            for i in range(min(self.in_channels, self.out_channels)):
+                self.conv1.weight[i, i, 0, 0, 0] = 1.0
+            if self.conv1.bias is not None:
+                self.conv1.bias.zero_()
 
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor

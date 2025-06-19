@@ -71,6 +71,9 @@ def main(config, args):
         device="cpu",
         skip_conv1=True,
     )
+    for m in unet_weak.modules():
+        if isinstance(m, ResnetBlock3D):
+            m.enable_skip()
 
     unet_main = unet_main.to(dtype=dtype)
     unet_weak = unet_weak.to(dtype=dtype)
