@@ -31,6 +31,7 @@ def get_down_block(
     motion_module_type=None,
     motion_module_kwargs=None,
     add_audio_layer=False,
+    skip_conv1=False, # Skip the first convolution if using STG
 ):
     down_block_type = down_block_type[7:] if down_block_type.startswith("UNetRes") else down_block_type
     if down_block_type == "DownBlock3D":
@@ -49,6 +50,7 @@ def get_down_block(
             use_motion_module=use_motion_module,
             motion_module_type=motion_module_type,
             motion_module_kwargs=motion_module_kwargs,
+            skip_conv1=skip_conv1, # Skip the first convolution if using STG
         )
     elif down_block_type == "CrossAttnDownBlock3D":
         if cross_attention_dim is None:
@@ -75,6 +77,7 @@ def get_down_block(
             motion_module_type=motion_module_type,
             motion_module_kwargs=motion_module_kwargs,
             add_audio_layer=add_audio_layer,
+            skip_conv1=skip_conv1,  # Skip the first convolution if using STG
         )
     raise ValueError(f"{down_block_type} does not exist.")
 
@@ -102,6 +105,7 @@ def get_up_block(
     motion_module_type=None,
     motion_module_kwargs=None,
     add_audio_layer=False,
+    skip_conv1=False,  # Skip the first convolution if using STG
 ):
     up_block_type = up_block_type[7:] if up_block_type.startswith("UNetRes") else up_block_type
     if up_block_type == "UpBlock3D":
@@ -120,6 +124,7 @@ def get_up_block(
             use_motion_module=use_motion_module,
             motion_module_type=motion_module_type,
             motion_module_kwargs=motion_module_kwargs,
+            skip_conv1=skip_conv1,  # Skip the first convolution if using STG
         )
     elif up_block_type == "CrossAttnUpBlock3D":
         if cross_attention_dim is None:
@@ -146,6 +151,7 @@ def get_up_block(
             motion_module_type=motion_module_type,
             motion_module_kwargs=motion_module_kwargs,
             add_audio_layer=add_audio_layer,
+            skip_conv1=skip_conv1,  # Skip the first convolution if using STG
         )
     raise ValueError(f"{up_block_type} does not exist.")
 
@@ -173,6 +179,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
         motion_module_type=None,
         motion_module_kwargs=None,
         add_audio_layer=False,
+        skip_conv1=False,  # Skip the first convolution if using STG
     ):
         super().__init__()
 
@@ -194,6 +201,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                 output_scale_factor=output_scale_factor,
                 pre_norm=resnet_pre_norm,
                 use_inflated_groupnorm=use_inflated_groupnorm,
+                skip_conv1=skip_conv1,  # Skip the first convolution if using STG
             )
         ]
         attentions = []
@@ -237,6 +245,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
                     use_inflated_groupnorm=use_inflated_groupnorm,
+                    skip_conv1=skip_conv1,  # Skip the first convolution if using STG
                 )
             )
 
@@ -287,6 +296,7 @@ class CrossAttnDownBlock3D(nn.Module):
         motion_module_type=None,
         motion_module_kwargs=None,
         add_audio_layer=False,
+        skip_conv1=False,  # Skip the first convolution if using STG
     ):
         super().__init__()
         resnets = []
@@ -311,6 +321,7 @@ class CrossAttnDownBlock3D(nn.Module):
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
                     use_inflated_groupnorm=use_inflated_groupnorm,
+                    skip_conv1=skip_conv1,  # Skip the first convolution if using STG
                 )
             )
             if dual_cross_attention:
@@ -427,6 +438,7 @@ class DownBlock3D(nn.Module):
         use_motion_module=None,
         motion_module_type=None,
         motion_module_kwargs=None,
+        skip_conv1=False,  # Skip the first convolution if using STG
     ):
         super().__init__()
         resnets = []
@@ -447,6 +459,7 @@ class DownBlock3D(nn.Module):
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
                     use_inflated_groupnorm=use_inflated_groupnorm,
+                    skip_conv1=skip_conv1,  # Skip the first convolution if using STG
                 )
             )
             motion_modules.append(
@@ -543,6 +556,7 @@ class CrossAttnUpBlock3D(nn.Module):
         motion_module_type=None,
         motion_module_kwargs=None,
         add_audio_layer=False,
+        skip_conv1=False,  # Skip the first convolution if using STG
     ):
         super().__init__()
         resnets = []
@@ -569,6 +583,7 @@ class CrossAttnUpBlock3D(nn.Module):
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
                     use_inflated_groupnorm=use_inflated_groupnorm,
+                    skip_conv1=skip_conv1,  # Skip the first convolution if using STG
                 )
             )
             if dual_cross_attention:
@@ -686,6 +701,7 @@ class UpBlock3D(nn.Module):
         use_motion_module=None,
         motion_module_type=None,
         motion_module_kwargs=None,
+        skip_conv1=False,  # Skip the first convolution if using STG
     ):
         super().__init__()
         resnets = []
@@ -708,6 +724,7 @@ class UpBlock3D(nn.Module):
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
                     use_inflated_groupnorm=use_inflated_groupnorm,
+                    skip_conv1=skip_conv1,  # Skip the first convolution if using STG
                 )
             )
             motion_modules.append(

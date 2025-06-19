@@ -47,7 +47,8 @@ class LipsyncPipeline(DiffusionPipeline):
         self,
         vae: AutoencoderKL,
         audio_encoder: Audio2Feature,
-        unet: UNet3DConditionModel,
+        unet_main: UNet3DConditionModel,    # main UNet for video generation
+        unet_weak: UNet3DConditionModel,    # weak UNet skip conv1 of main UNet's resnet blocks
         scheduler: Union[
             DDIMScheduler,
             PNDMScheduler,
@@ -86,10 +87,10 @@ class LipsyncPipeline(DiffusionPipeline):
             new_config["clip_sample"] = False
             scheduler._internal_dict = FrozenDict(new_config)
 
-        is_unet_version_less_0_9_0 = hasattr(unet.config, "_diffusers_version") and version.parse(
-            version.parse(unet.config._diffusers_version).base_version
+        is_unet_version_less_0_9_0 = hasattr(unet_main.config, "_diffusers_version") and version.parse(
+            version.parse(unet_main.config._diffusers_version).base_version
         ) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = hasattr(unet_main.config, "sample_size") and unet_main.config.sample_size < 64
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -103,14 +104,15 @@ class LipsyncPipeline(DiffusionPipeline):
                 " the `unet/config.json` file"
             )
             deprecate("sample_size<64", "1.0.0", deprecation_message, standard_warn=False)
-            new_config = dict(unet.config)
+            new_config = dict(unet_main.config)
             new_config["sample_size"] = 64
-            unet._internal_dict = FrozenDict(new_config)
+            unet_main._internal_dict = FrozenDict(new_config)
 
         self.register_modules(
             vae=vae,
             audio_encoder=audio_encoder,
-            unet=unet,
+            unet_main=unet_main,
+            unet_weak=unet_weak,
             scheduler=scheduler,
         )
 
@@ -126,9 +128,9 @@ class LipsyncPipeline(DiffusionPipeline):
 
     @property
     def _execution_device(self):
-        if self.device != torch.device("meta") or not hasattr(self.unet, "_hf_hook"):
+        if self.device != torch.device("meta") or not hasattr(self.unet_main, "_hf_hook"):
             return self.device
-        for module in self.unet.modules():
+        for module in self.unet_main.modules():
             if (
                 hasattr(module, "_hf_hook")
                 and hasattr(module._hf_hook, "execution_device")
@@ -331,8 +333,9 @@ class LipsyncPipeline(DiffusionPipeline):
         callback_steps: Optional[int] = 1,
         **kwargs,
     ):
-        is_train = self.unet.training
-        self.unet.eval()
+        is_train = self.unet_main.training
+        self.unet_main.eval()
+        self.unet_weak.eval()
 
         check_ffmpeg_installed()
 
@@ -343,8 +346,8 @@ class LipsyncPipeline(DiffusionPipeline):
         self.set_progress_bar_config(desc=f"Sample frames: {num_frames}")
 
         # 1. Default height and width to unet
-        height = height or self.unet.config.sample_size * self.vae_scale_factor
-        width = width or self.unet.config.sample_size * self.vae_scale_factor
+        height = height or self.unet_main.config.sample_size * self.vae_scale_factor
+        width = width or self.unet_main.config.sample_size * self.vae_scale_factor
 
         # 2. Check inputs
         self.check_inputs(height, width, callback_steps)
@@ -386,7 +389,7 @@ class LipsyncPipeline(DiffusionPipeline):
 
         num_inferences = math.ceil(len(whisper_chunks) / num_frames)
         for i in tqdm.tqdm(range(num_inferences), desc="Doing inference..."):
-            if self.unet.add_audio_layer:
+            if self.unet_main.add_audio_layer:
                 audio_embeds = torch.stack(whisper_chunks[i * num_frames : (i + 1) * num_frames])
                 audio_embeds = audio_embeds.to(device, dtype=weight_dtype)
                 if do_classifier_free_guidance:
@@ -434,12 +437,17 @@ class LipsyncPipeline(DiffusionPipeline):
                     unet_input = torch.cat([unet_input, mask_latents, masked_image_latents, ref_latents], dim=1)
 
                     # predict the noise residual
-                    noise_pred = self.unet(unet_input, t, encoder_hidden_states=audio_embeds).sample
+                    noise_pred_main = self.unet_main(unet_input, t, encoder_hidden_states=audio_embeds).sample
 
                     # perform guidance
+                    # if do_classifier_free_guidance is True, we use Classifier Free Guidance
+                    # else, we use Spatiotemporal Skip Guidance
                     if do_classifier_free_guidance:
-                        noise_pred_uncond, noise_pred_audio = noise_pred.chunk(2)
+                        noise_pred_uncond, noise_pred_audio = noise_pred_main.chunk(2)
                         noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_audio - noise_pred_uncond)
+                    else:
+                        noise_pred_weak = self.unet_weak(unet_input, t, encoder_hidden_states=audio_embeds).sample
+                        noise_pred = noise_pred_main + 1.5 * (noise_pred_weak - noise_pred_main)
 
                     # compute the previous noisy sample x_t -> x_t-1
                     latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
@@ -463,7 +471,7 @@ class LipsyncPipeline(DiffusionPipeline):
         audio_samples = audio_samples[:audio_samples_remain_length].cpu().numpy()
 
         if is_train:
-            self.unet.train()
+            self.unet_main.train()
 
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)

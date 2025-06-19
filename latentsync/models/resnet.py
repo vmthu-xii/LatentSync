@@ -119,6 +119,7 @@ class ResnetBlock3D(nn.Module):
         output_scale_factor=1.0,
         use_in_shortcut=None,
         use_inflated_groupnorm=False,
+        skip_conv1=False,               # Skip the first convolution if using STG
     ):
         super().__init__()
         self.pre_norm = pre_norm
@@ -129,6 +130,7 @@ class ResnetBlock3D(nn.Module):
         self.use_conv_shortcut = conv_shortcut
         self.time_embedding_norm = time_embedding_norm
         self.output_scale_factor = output_scale_factor
+        self.skip_conv1 = skip_conv1    # Skip the first convolution if using STG
 
         if groups_out is None:
             groups_out = groups
@@ -139,7 +141,11 @@ class ResnetBlock3D(nn.Module):
         else:
             self.norm1 = torch.nn.GroupNorm(num_groups=groups, num_channels=in_channels, eps=eps, affine=True)
 
-        self.conv1 = InflatedConv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        # Skip the first convolution if using STG
+        if skip_conv1:
+            self.conv1 = nn.Identity()
+        else:
+            self.conv1 = InflatedConv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         if temb_channels is not None:
             if self.time_embedding_norm == "default":

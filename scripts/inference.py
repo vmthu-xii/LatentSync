@@ -58,18 +58,28 @@ def main(config, args):
     vae.config.scaling_factor = 0.18215
     vae.config.shift_factor = 0
 
-    unet, _ = UNet3DConditionModel.from_pretrained(
+    unet_main, _ = UNet3DConditionModel.from_pretrained(
         OmegaConf.to_container(config.model),
         args.inference_ckpt_path,
         device="cpu",
+        skip_conv1=False,
     )
 
-    unet = unet.to(dtype=dtype)
+    unet_weak, _ = UNet3DConditionModel.from_pretrained(
+        OmegaConf.to_container(config.model),
+        args.inference_ckpt_path,
+        device="cpu",
+        skip_conv1=True,
+    )
+
+    unet_main = unet_main.to(dtype=dtype)
+    unet_weak = unet_weak.to(dtype=dtype)
 
     pipeline = LipsyncPipeline(
         vae=vae,
         audio_encoder=audio_encoder,
-        unet=unet,
+        unet_main=unet_main,
+        unet_weak=unet_weak,
         scheduler=scheduler,
     ).to("cuda")
 
