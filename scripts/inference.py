@@ -72,9 +72,17 @@ def main(config, args):
         device="cpu",
         skip_conv1=True,
     )
+
+    if args.seed != -1:
+        set_seed(args.seed)
+    else:
+        torch.seed()
+
+    print(f"Initial seed: {torch.initial_seed()}")
+
     for m in unet_weak.modules():
         if isinstance(m, ResnetBlock3D):
-            m.enable_skip()
+            m.enable_skip(args.skip_connection_threshold)
 
     unet_main = unet_main.to(dtype=dtype)
     unet_weak = unet_weak.to(dtype=dtype)
@@ -92,13 +100,6 @@ def main(config, args):
         helper = DeepCacheSDHelper(pipe=pipeline)
         helper.set_params(cache_interval=3, cache_branch_id=0)
         helper.enable()
-
-    if args.seed != -1:
-        set_seed(args.seed)
-    else:
-        torch.seed()
-
-    print(f"Initial seed: {torch.initial_seed()}")
 
     pipeline(
         video_path=args.video_path,
@@ -129,6 +130,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=1247)
     parser.add_argument("--enable_deepcache", action="store_true")
     parser.add_argument("--stg_scale", type=float, default=1.5)
+    parser.add_argument("--skip_connection_threshold", type=float, default=0.5)
+    
     args = parser.parse_args()
 
     config = OmegaConf.load(args.unet_config_path)

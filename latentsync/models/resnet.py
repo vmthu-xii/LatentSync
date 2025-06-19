@@ -182,15 +182,15 @@ class ResnetBlock3D(nn.Module):
             self.conv_shortcut = InflatedConv3d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
     # Enable skip connection for STG
-    def enable_skip(self):
-        #  if torch.rand(()) < 0.5:
-        self.conv1 = nn.Conv3d(self.in_channels, self.out_channels, kernel_size=1)
-        with torch.no_grad():
-            self.conv1.weight.zero_()
-            for i in range(min(self.in_channels, self.out_channels)):
-                self.conv1.weight[i, i, 0, 0, 0] = 1.0
-            if self.conv1.bias is not None:
-                self.conv1.bias.zero_()
+    def enable_skip(self, skip_connection_threshold=0.5):
+         if torch.rand(()) > skip_connection_threshold:
+            self.conv1 = nn.Conv3d(self.in_channels, self.out_channels, kernel_size=1)
+            with torch.no_grad():
+                self.conv1.weight.zero_()
+                for i in range(min(self.in_channels, self.out_channels)):
+                    self.conv1.weight[i, i, 0, 0, 0] = 1.0
+                if self.conv1.bias is not None:
+                    self.conv1.bias.zero_()
 
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor
