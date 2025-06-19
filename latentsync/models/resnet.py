@@ -142,8 +142,14 @@ class ResnetBlock3D(nn.Module):
             self.norm1 = torch.nn.GroupNorm(num_groups=groups, num_channels=in_channels, eps=eps, affine=True)
 
         # Skip the first convolution if using STG
-        if skip_conv1:
-            self.conv1 = nn.Identity()
+        if self.skip_conv1:
+            self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=1)
+            with torch.no_grad():
+                self.conv1.weight.zero_()
+                for i in range(min(in_channels, out_channels)):
+                    self.conv1.weight[i, i, 0, 0, 0] = 1.0
+                if self.conv1.bias is not None:
+                    self.conv1.bias.zero_()
         else:
             self.conv1 = InflatedConv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
