@@ -500,6 +500,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         # unet = cls.from_config(model_config).to(device)
         
         skip_conv1 = kwargs.pop("skip_conv1", False)
+        print(f"skip_conv1: {skip_conv1}")
         unet = cls.from_config({**model_config, "skip_conv1": skip_conv1}, **kwargs).to(device)
         
         if ckpt_path != "":
