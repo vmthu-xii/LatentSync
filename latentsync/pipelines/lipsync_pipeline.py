@@ -331,6 +331,7 @@ class LipsyncPipeline(DiffusionPipeline):
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
+        stg_scale: float = 1.5,
         **kwargs,
     ):
         is_train = self.unet_main.training
@@ -447,7 +448,7 @@ class LipsyncPipeline(DiffusionPipeline):
                         noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_audio - noise_pred_uncond)
                     else:
                         noise_pred_weak = self.unet_weak(unet_input, t, encoder_hidden_states=audio_embeds).sample
-                        noise_pred = noise_pred_main + 1.5 * (noise_pred_main - noise_pred_weak)
+                        noise_pred = noise_pred_main + stg_scale * (noise_pred_main - noise_pred_weak)
 
                     # compute the previous noisy sample x_t -> x_t-1
                     latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
