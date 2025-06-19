@@ -81,6 +81,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         motion_module_type=None,
         motion_module_kwargs={},
         add_audio_layer=False,
+        skip_conv1: bool = False,
     ):
         super().__init__()
 
@@ -150,6 +151,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                 motion_module_type=motion_module_type,
                 motion_module_kwargs=motion_module_kwargs,
                 add_audio_layer=add_audio_layer,
+                skip_conv1=skip_conv1, # Skip the first convolution if using STG
             )
             self.down_blocks.append(down_block)
 
@@ -173,6 +175,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                 motion_module_type=motion_module_type,
                 motion_module_kwargs=motion_module_kwargs,
                 add_audio_layer=add_audio_layer,
+                skip_conv1=skip_conv1,  # Skip the first convolution if using STG
             )
         else:
             raise ValueError(f"unknown mid_block_type : {mid_block_type}")
@@ -223,6 +226,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                 motion_module_type=motion_module_type,
                 motion_module_kwargs=motion_module_kwargs,
                 add_audio_layer=add_audio_layer,
+                skip_conv1=skip_conv1,  # Skip the first convolution if using STG
             )
             self.up_blocks.append(up_block)
             prev_output_channel = output_channel
@@ -492,8 +496,12 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         return super().load_state_dict(state_dict=state_dict, strict=strict)
 
     @classmethod
-    def from_pretrained(cls, model_config: dict, ckpt_path: str, device="cpu"):
-        unet = cls.from_config(model_config).to(device)
+    def from_pretrained(cls, model_config: dict, ckpt_path: str, device="cpu", **kwargs):
+        # unet = cls.from_config(model_config).to(device)
+        
+        skip_conv1 = kwargs.pop("skip_conv1", False)
+        unet = cls.from_config({**model_config, "skip_conv1": skip_conv1}, **kwargs).to(device)
+        
         if ckpt_path != "":
             zero_rank_log(logger, f"Load from checkpoint: {ckpt_path}")
             ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
